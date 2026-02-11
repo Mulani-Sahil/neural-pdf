@@ -603,7 +603,15 @@ uploadForm.addEventListener("submit", async (e) => {
       body: formData
     });
 
-    const data = await res.json();
+    let data;
+try {
+  data = await res.json();
+} catch (err) {
+  const text = await res.text();
+  console.error("Server returned non-JSON:", text);
+  throw new Error("Invalid server response");
+}
+
 
     if (res.ok && data.success) {
       sessionId = data.session_id;
