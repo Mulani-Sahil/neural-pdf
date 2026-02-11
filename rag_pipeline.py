@@ -5,10 +5,8 @@ from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 
-from langchain_google_genai import (
-    GoogleGenerativeAIEmbeddings,
-    ChatGoogleGenerativeAI
-)
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_groq import ChatGroq
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import create_retrieval_chain
@@ -20,8 +18,8 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 # --------------------------------------------------
 load_dotenv()
 
-if not os.getenv("GOOGLE_API_KEY"):
-    raise EnvironmentError("❌ GOOGLE_API_KEY not found in .env file")
+if not os.getenv("GROQ_API_KEY"):
+    raise EnvironmentError("GROQ_API_KEY not set in environment variables")
 
 
 # --------------------------------------------------
@@ -46,19 +44,21 @@ def build_vectorstore(pdf_path: str):
         )
         chunks = splitter.split_documents(documents)
 
-        # Embeddings (Gemini)
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001"
+        # Local Embeddings (FREE + Render Safe)
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
 
-        # Vectorstore (persistent)
+        # Render-safe writable directory
+        persist_path = os.path.join(os.getcwd(), "chroma_db")
+
         vectorstore = Chroma.from_documents(
             documents=chunks,
             embedding=embeddings,
-            persist_directory="./chroma_db"
+            persist_directory=persist_path
         )
 
-        print(f"✅ Indexed {len(chunks)} chunks from PDF")
+        print(f"Indexed {len(chunks)} chunks from PDF")
         return vectorstore
 
     except Exception as e:
@@ -73,21 +73,18 @@ def get_rag_chain(vectorstore):
     Create PDF-only RAG chain
     """
     try:
-        # Retriever
         retriever = vectorstore.as_retriever(
             search_type="similarity",
             search_kwargs={"k": 4}
         )
 
-        # LLM (Stable Gemini)
-        llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash-lite",
+        # Groq LLM (Fast + Free tier friendly)
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant",  # safer + cheaper than 70B
             temperature=0.3,
-            streaming=True,
-            max_retries=2
+            streaming=True
         )
 
-        # STRICT PDF-ONLY Prompt
         prompt = ChatPromptTemplate.from_messages([
             ("system", """
 You are a PDF document assistant.
@@ -105,13 +102,11 @@ Context:
             ("human", "{input}")
         ])
 
-        # Document chain
         document_chain = create_stuff_documents_chain(
             llm=llm,
             prompt=prompt
         )
 
-        # Retrieval chain
         rag_chain = create_retrieval_chain(
             retriever=retriever,
             combine_docs_chain=document_chain
@@ -124,10 +119,10 @@ Context:
 
 
 # --------------------------------------------------
-# Example Usage
+# Example Usage (Local Testing Only)
 # --------------------------------------------------
 if __name__ == "__main__":
-    pdf_path = "sample.pdf"  # <-- apna PDF path yaha do
+    pdf_path = "sample.pdf"
 
     vectorstore = build_vectorstore(pdf_path)
     rag_chain = get_rag_chain(vectorstore)
