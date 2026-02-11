@@ -48,7 +48,7 @@ def build_vectorstore(pdf_path: str):
 
         # Embeddings (Gemini)
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004"
+            model="models/embedding-001"
         )
 
         # Vectorstore (persistent)
