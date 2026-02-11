@@ -12,10 +12,11 @@ from rag_pipeline import build_vectorstore, get_rag_chain
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Use temporary directory (Vercel writable location)
+# --------------------------------------------------
+# Render Writable Temp Directory
+# --------------------------------------------------
 TEMP_DIR = tempfile.gettempdir()
 UPLOAD_DIR = os.path.join(TEMP_DIR, "uploads")
-
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # In-memory session store (resets on cold start)
@@ -27,21 +28,26 @@ class QuestionRequest(BaseModel):
     session_id: str
 
 
+# --------------------------------------------------
+# Cleanup
+# --------------------------------------------------
 def cleanup_session(session_id: str):
-    """Clean up uploaded file and session memory"""
     if session_id not in sessions:
         return
 
     session_data = sessions.pop(session_id)
 
-    # Remove uploaded file
-    if 'file_path' in session_data and os.path.exists(session_data['file_path']):
+    file_path = session_data.get("file_path")
+    if file_path and os.path.exists(file_path):
         try:
-            os.remove(session_data['file_path'])
+            os.remove(file_path)
         except Exception:
             pass
 
 
+# --------------------------------------------------
+# Routes
+# --------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -51,12 +57,12 @@ async def home(request: Request):
 async def upload_pdf(file: UploadFile = File(...)):
     session_id = str(uuid.uuid4())
 
-    if not file.filename.endswith(".pdf"):
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
 
     contents = await file.read()
 
-    if len(contents) > 10 * 1024 * 1024:  # 10MB limit
+    if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File size exceeds 10MB limit")
 
     try:
@@ -65,7 +71,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             f.write(contents)
 
-        # Build vectorstore (in-memory)
         vectorstore = build_vectorstore(file_path)
         rag_chain = get_rag_chain(vectorstore)
 
@@ -102,10 +107,17 @@ async def ask_question(payload: QuestionRequest):
 
     async def stream():
         try:
-            for chunk in rag_chain.stream({"input": payload.question}):
-                if "answer" in chunk:
-                    yield chunk["answer"]
-                    await asyncio.sleep(0.01)
+            loop = asyncio.get_event_loop()
+
+            def generate():
+                for chunk in rag_chain.stream({"input": payload.question}):
+                    if "answer" in chunk:
+                        yield chunk["answer"]
+
+            for token in await loop.run_in_executor(None, lambda: list(generate())):
+                yield token
+                await asyncio.sleep(0.01)
+
         except Exception as e:
             yield f"\n\nError: {str(e)}"
 
