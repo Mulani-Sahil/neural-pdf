@@ -18,8 +18,10 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 # --------------------------------------------------
 load_dotenv()
 
-if not os.getenv("GROQ_API_KEY"):
-    raise EnvironmentError("GROQ_API_KEY not set in environment variables")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    print("Warning: GROQ_API_KEY not set")
 
 
 # --------------------------------------------------
