@@ -1,38 +1,29 @@
-# ----------------------------
-# FastAPI Server
-# ----------------------------
+# FastAPI and server
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart==0.0.20
 jinja2==3.1.4
-pydantic==2.8.2
+pydantic==2.10.0
+
+# LangChain and RAG - UPDATED to compatible versions
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-core==0.3.28
+langchain-text-splitters==0.3.4
+langchain-groq==0.2.1
+langchain-huggingface==0.1.2
+
+# Groq API
+groq==0.9.0
+
+# Document processing
+pymupdf
+
+# HuggingFace embeddings (lightweight)
+sentence-transformers==3.0.1
+
+# Vector store - FIXED VERSION
+chromadb==0.4.24
+
+# Utilities
 python-dotenv==1.0.1
-
-# ----------------------------
-# LangChain Core (Stable 0.2.x)
-# ----------------------------
-langchain==0.2.16
-langchain-core==0.2.38
-langchain-community==0.2.16
-langchain-text-splitters==0.2.4
-
-# ----------------------------
-# LLM Provider (Groq)
-# ----------------------------
-langchain-groq==0.1.9
-
-# ----------------------------
-# Embeddings (Local - Free)
-# ----------------------------
-langchain-huggingface==0.0.3
-sentence-transformers==2.7.0
-
-# ----------------------------
-# Vector Database
-# ----------------------------
-chromadb==0.5.5
-
-# ----------------------------
-# PDF Processing
-# ----------------------------
-pymupdf==1.24.9
