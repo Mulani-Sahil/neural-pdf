@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
-
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
@@ -18,10 +17,11 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 # --------------------------------------------------
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Disable ChromaDB telemetry to avoid warnings
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-if not GROQ_API_KEY:
-    print("Warning: GROQ_API_KEY not set")
+if not os.getenv("GROQ_API_KEY"):
+    raise EnvironmentError("❌ GROQ_API_KEY not found in .env file")
 
 
 # --------------------------------------------------
@@ -46,21 +46,20 @@ def build_vectorstore(pdf_path: str):
         )
         chunks = splitter.split_documents(documents)
 
-        # Local Embeddings (FREE + Render Safe)
+        # Embeddings (HuggingFace - lightweight model)
         embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
         )
 
-        # Render-safe writable directory
-        persist_path = os.path.join(os.getcwd(), "chroma_db")
-
+        # Vectorstore (in-memory for Render)
         vectorstore = Chroma.from_documents(
             documents=chunks,
-            embedding=embeddings,
-            persist_directory=persist_path
+            embedding=embeddings
         )
 
-        print(f"Indexed {len(chunks)} chunks from PDF")
+        print(f"✅ Indexed {len(chunks)} chunks from PDF")
         return vectorstore
 
     except Exception as e:
@@ -72,21 +71,24 @@ def build_vectorstore(pdf_path: str):
 # --------------------------------------------------
 def get_rag_chain(vectorstore):
     """
-    Create PDF-only RAG chain
+    Create PDF-only RAG chain with Groq
     """
     try:
+        # Retriever
         retriever = vectorstore.as_retriever(
             search_type="similarity",
             search_kwargs={"k": 4}
         )
 
-        # Groq LLM (Fast + Free tier friendly)
+        # LLM (Groq - Fast!)
         llm = ChatGroq(
-            model="llama-3.1-8b-instant",  # safer + cheaper than 70B
+            model="llama-3.3-70b-versatile",  # Fast and accurate
             temperature=0.3,
+            max_tokens=1024,
             streaming=True
         )
 
+        # STRICT PDF-ONLY Prompt
         prompt = ChatPromptTemplate.from_messages([
             ("system", """
 You are a PDF document assistant.
@@ -104,11 +106,13 @@ Context:
             ("human", "{input}")
         ])
 
+        # Document chain
         document_chain = create_stuff_documents_chain(
             llm=llm,
             prompt=prompt
         )
 
+        # Retrieval chain
         rag_chain = create_retrieval_chain(
             retriever=retriever,
             combine_docs_chain=document_chain
@@ -121,10 +125,10 @@ Context:
 
 
 # --------------------------------------------------
-# Example Usage (Local Testing Only)
+# Example Usage
 # --------------------------------------------------
 if __name__ == "__main__":
-    pdf_path = "sample.pdf"
+    pdf_path = "sample.pdf"  # <-- apna PDF path yaha do
 
     vectorstore = build_vectorstore(pdf_path)
     rag_chain = get_rag_chain(vectorstore)
