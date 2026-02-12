@@ -518,10 +518,9 @@
 let sessionId = null;
 let sessionReady = false;
 
-async function cleanupSession() {
+function cleanupSession() {
   if (sessionId) {
-    const url = `/cleanup/${sessionId}`;
-    navigator.sendBeacon(url);
+    navigator.sendBeacon(`/cleanup/${sessionId}`);
   }
 }
 
@@ -551,7 +550,7 @@ const answerContent = document.getElementById("answer-content");
 /* ---------- FILE SELECTION ---------- */
 fileInput.addEventListener("change", (e) => {
   const file = e.target.files[0];
-  
+
   if (file) {
     uploadPlaceholder.classList.add("hidden");
     fileSelected.classList.remove("hidden");
@@ -568,8 +567,7 @@ fileInput.addEventListener("change", (e) => {
 
 /* ---------- CHARACTER COUNT ---------- */
 questionInput.addEventListener("input", (e) => {
-  const length = e.target.value.length;
-  charCount.textContent = `${length} chars`;
+  charCount.textContent = `${e.target.value.length} chars`;
 });
 
 /* ---------- PDF UPLOAD ---------- */
@@ -581,18 +579,6 @@ uploadForm.addEventListener("submit", async (e) => {
 
   uploadBtn.disabled = true;
   uploadBtnText.innerHTML = '<div class="spinner"></div>SCANNING...';
-  uploadStatus.classList.remove("hidden");
-  uploadStatus.className = "mt-4 glass rounded-xl p-4 border border-blue-500/20 text-blue-300";
-  uploadStatus.innerHTML = `
-    <div class="flex items-center gap-3">
-      <div class="ai-typing">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <span class="mono text-xs">Processing vectors...</span>
-    </div>
-  `;
 
   const formData = new FormData();
   formData.append("file", file);
@@ -603,51 +589,31 @@ uploadForm.addEventListener("submit", async (e) => {
       body: formData
     });
 
-    let data;
-try {
-  data = await res.json();
-} catch (err) {
-  const text = await res.text();
-  console.error("Server returned non-JSON:", text);
-  throw new Error("Invalid server response");
-}
+    const data = await res.json();
 
-
-    if (res.ok && data.success) {
-      sessionId = data.session_id;
-      sessionReady = true;
-      
-      uploadStatus.className = "mt-4 glass rounded-xl p-4 border border-cyan-500/30 text-cyan-300 glow-border";
-      uploadStatus.innerHTML = `
-        <div class="flex items-center gap-3">
-          <svg class="w-4 h-4 text-cyan-400" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
-          </svg>
-          <span class="mono text-xs font-medium">SCAN COMPLETE • System ready</span>
-        </div>
-      `;
-      
-      questionInput.disabled = false;
-      askBtn.disabled = false;
-      
-      statusBadge.classList.remove("hidden");
-      statusText.textContent = `LOADED: ${data.filename}`;
-      
-      questionInput.focus();
-      
-    } else {
+    if (!res.ok || !data.success) {
       throw new Error(data.detail || "Upload failed");
     }
-  } catch (error) {
-    uploadStatus.className = "mt-4 glass rounded-xl p-4 border border-red-500/30 text-red-300";
+
+    sessionId = data.session_id;
+    sessionReady = true;
+
+    uploadStatus.className = "mt-4 glass rounded-xl p-4 border border-cyan-500/30 text-cyan-300 glow-border";
     uploadStatus.innerHTML = `
       <div class="flex items-center gap-3">
-        <svg class="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
-        </svg>
-        <span class="mono text-xs">${error.message}</span>
+        <span class="mono text-xs font-medium">SCAN COMPLETE • System ready</span>
       </div>
     `;
+
+    questionInput.disabled = false;
+    askBtn.disabled = false;
+    statusBadge.classList.remove("hidden");
+    statusText.textContent = `LOADED: ${data.filename}`;
+    questionInput.focus();
+
+  } catch (error) {
+    uploadStatus.className = "mt-4 glass rounded-xl p-4 border border-red-500/30 text-red-300";
+    uploadStatus.innerHTML = `<span class="mono text-xs">${error.message}</span>`;
   } finally {
     uploadBtn.disabled = false;
     uploadBtnText.textContent = "INITIALIZE SCAN";
@@ -659,67 +625,42 @@ askForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const question = questionInput.value.trim();
-  if (!question) return;
-  
-  if (!sessionReady || !sessionId) {
-    alert("Session not ready. Please refresh.");
+  if (!question || !sessionReady || !sessionId) {
+    alert("Session not ready.");
     return;
   }
 
   askBtn.disabled = true;
   askBtnText.innerHTML = '<div class="spinner"></div>PROCESSING...';
 
-  answerContent.innerHTML = `
-    <div class="flex items-center gap-3 text-cyan-400">
-      <div class="ai-typing">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <span class="mono text-xs">Analyzing document...</span>
-    </div>
-  `;
   answerContent.classList.add("scanning");
+  answerContent.innerHTML = `<span class="mono text-xs text-cyan-400">Analyzing document...</span>`;
 
   try {
     const response = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         question: question,
         session_id: sessionId
       })
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || "Failed to get answer");
+      throw new Error(data.detail || "Failed to get answer");
     }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-
-    answerContent.textContent = "";
     answerContent.classList.remove("scanning");
     answerContent.classList.add("animate-scale");
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      answerContent.textContent += decoder.decode(value);
-    }
+    answerContent.textContent = data.answer;
 
   } catch (error) {
     answerContent.classList.remove("scanning");
     answerContent.innerHTML = `
-      <div class="flex items-start gap-3 text-red-400">
-        <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-        </svg>
-        <div>
-          <p class="font-semibold text-sm mb-1">ERROR</p>
-          <p class="text-xs">${error.message}</p>
-        </div>
+      <div class="text-red-400 mono text-xs">
+        ERROR: ${error.message}
       </div>
     `;
   } finally {
