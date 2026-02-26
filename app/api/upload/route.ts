@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -18,15 +19,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
 
-    // Convert PDF to base64 — Groq can read it directly
-    const buffer = await file.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Dynamically import to bypass TypeScript strict checking
+    const pdfParse: (buf: Buffer) => Promise<{ text: string; numpages: number }> =
+      (await import('pdf-parse' as any)).default;
+
+    const data = await pdfParse(buffer);
+
+    if (!data.text?.trim()) {
+      return NextResponse.json({ error: 'PDF appears to be empty or unreadable' }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,
       filename: file.name,
-      pdfBase64: base64,
-      pageCount: 'unknown',
+      pdfText: data.text,
+      pageCount: data.numpages,
     });
 
   } catch (err: unknown) {
