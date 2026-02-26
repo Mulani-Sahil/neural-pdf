@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Trim PDF text to avoid token limits
-    const contextText = pdfText ? pdfText.slice(0, 12000) : null;
+    const contextText = pdfText ? pdfText.slice(0, 80000) : null;
 
     const systemPrompt = contextText
       ? `You are a helpful AI assistant. You have been given a PDF document as context.
