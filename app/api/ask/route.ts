@@ -8,7 +8,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
-    const { question, pdfBase64, pdfText } = await req.json();
+    const { question, pdfText } = await req.json();
 
     if (!question?.trim()) {
       return NextResponse.json({ error: 'Question is required' }, { status: 400 });
@@ -17,47 +17,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'GROQ_API_KEY not configured' }, { status: 500 });
     }
 
-    let messages: Groq.Chat.ChatCompletionMessageParam[];
+    const contextText = pdfText ? (pdfText as string).slice(0, 80000) : null;
 
-    if (pdfBase64) {
-      // Send PDF directly to Groq as a document
-      messages = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `You are a helpful AI assistant. Answer the following question. If a PDF is provided, use it as context but also use your own knowledge for general questions.\n\nQuestion: ${question}`,
-            },
-            {
-              type: 'document' as any,
-              document: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: pdfBase64,
-              },
-            },
-          ],
-        },
-      ];
-    } else {
-      // No PDF — general chat
-      const contextText = pdfText ? pdfText.slice(0, 80000) : null;
-      const systemPrompt = contextText
-        ? `You are a helpful AI assistant. PDF content:\n\n${contextText}`
-        : `You are a helpful AI assistant. Answer clearly and concisely.`;
+    const systemPrompt = contextText
+      ? `You are a helpful AI assistant. You have been given a PDF document as context.
+RULES:
+1. If the question relates to the PDF, answer using the PDF content.
+2. For general questions (math, coding, science, etc.), use your own knowledge.
+3. If using the PDF, mention it briefly e.g. "According to the PDF...".
+4. Be helpful, clear and concise.
 
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
-      ];
-    }
+PDF CONTENT:
+${contextText}`
+      : `You are a helpful AI assistant. Answer clearly and concisely.`;
 
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       temperature: 0.5,
       max_tokens: 2048,
-      messages,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: question },
+      ],
     });
 
     const answer = completion.choices[0]?.message?.content ?? 'No answer generated.';
@@ -65,7 +46,6 @@ export async function POST(req: NextRequest) {
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('Error in /api/ask:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
