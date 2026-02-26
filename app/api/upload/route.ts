@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pdfParse from 'pdf-parse';
+
+const pdfParse = require('pdf-parse');
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,7 +18,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 });
     }
 
-    // 10MB limit
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
