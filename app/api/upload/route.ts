@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extractText } from 'unpdf';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -19,23 +18,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
 
+    // Convert PDF to base64 — Groq can read it directly
     const buffer = await file.arrayBuffer();
-    const { text, totalPages } = await extractText(new Uint8Array(buffer), { mergePages: true });
-
-    if (!text?.trim()) {
-      return NextResponse.json({ error: 'PDF appears to be empty or unreadable' }, { status: 400 });
-    }
+    const base64 = Buffer.from(buffer).toString('base64');
 
     return NextResponse.json({
       success: true,
       filename: file.name,
-      pdfText: text,
-      pageCount: totalPages,
+      pdfBase64: base64,
+      pageCount: 'unknown',
     });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to process PDF';
-    console.error('Error in /api/upload:', message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
