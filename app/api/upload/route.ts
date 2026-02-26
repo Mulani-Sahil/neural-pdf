@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
+import { extractText } from 'unpdf';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -20,26 +19,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const buffer = await file.arrayBuffer();
+    const { text, totalPages } = await extractText(new Uint8Array(buffer), { mergePages: true });
 
-    // Use require to bypass TypeScript type checking
-    // eslint-disable-next-line
-    const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
-    const data = await pdfParse(buffer);
-
-    if (!data.text?.trim()) {
+    if (!text?.trim()) {
       return NextResponse.json({ error: 'PDF appears to be empty or unreadable' }, { status: 400 });
     }
 
     return NextResponse.json({
       success: true,
       filename: file.name,
-      pdfText: data.text,
-      pageCount: data.numpages,
+      pdfText: text,
+      pageCount: totalPages,
     });
 
-  } catch (err: any) {
-    console.error('Error in /api/upload:', err);
-    return NextResponse.json({ error: err.message || 'Failed to process PDF' }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to process PDF';
+    console.error('Error in /api/upload:', message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
