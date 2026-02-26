@@ -602,7 +602,7 @@ export default function Home() {
           <div className="messages">
             {messages.map(msg => (
               <div className="msg-row" key={msg.id}>
-                <div className={`avatar ${msg.role === 'ai' || msg.role === 'assistant' ? 'avatar-ai' : 'avatar-user'}`}>
+                <div className={`avatar ${msg.role === 'assistant' ? 'avatar-ai' : 'avatar-user'}`}>
                   {msg.role === 'assistant' ? '⚡' : '👤'}
                 </div>
                 <div className="msg-content">
