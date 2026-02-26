@@ -1,3 +1,8 @@
+/*
+Project Name: Neural PDF AI
+Developer: Sahil Mulani
+Developed: 2026
+*/
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
